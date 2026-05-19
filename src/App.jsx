@@ -174,7 +174,7 @@ async function callAI(messages, appState) {
   const systemPrompt = buildSystemPrompt(appState);
   const response = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-app-token": import.meta.env.VITE_APP_SECRET || "" },
     body: JSON.stringify({
       messages: messages.map(m => ({ role: m.role, content: m.content })),
       systemPrompt,
@@ -210,6 +210,14 @@ export default function App() {
   const [activeSess, setActiveSess] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [authed, setAuthed] = useState(() => {
+    try {
+      const raw = localStorage.getItem('pulse_auth');
+      if (!raw) return false;
+      const { ts } = JSON.parse(raw);
+      return Date.now() - ts < 30 * 24 * 60 * 60 * 1000;
+    } catch { return false; }
+  });
 
   useEffect(() => {
     (async () => {
@@ -305,6 +313,7 @@ export default function App() {
     setCheckins(newCheckins);
   }, [sessions, planMeta, checkins, applyActions]);
 
+  if (!authed) return <PinScreen onAuth={() => setAuthed(true)} />;
   if (!loaded || !planMeta) return <div style={{ background:"#000", minHeight:"100vh" }} />;
 
   return (
@@ -669,6 +678,71 @@ function SL({children}){return <div style={S.sl}>{children}</div>}
 function Lb({children}){return <div style={S.lb}>{children}</div>}
 function Sl({l,v,min,max,step,set,c}){return <div style={{marginBottom:8}}><div style={{...S.slL,color:c||"#7a8599"}}>{l}</div><input type="range" min={min} max={max} step={step} value={v} onChange={e=>set(+e.target.value)} style={S.rng}/></div>}
 function Modal({t,sub,onClose,children}){return(<div style={S.ov} onClick={onClose}><div style={{...S.mo,animation:"slideUp .3s ease-out"}} onClick={e=>e.stopPropagation()}><div style={S.moH}/><div style={S.moHd}><div><div style={S.moT}>{t}</div>{sub&&<div style={S.moS}>{sub}</div>}</div><button style={S.moX} onClick={onClose}>✕</button></div><div style={S.moB}>{children}</div></div></div>);}
+
+// ─── Pin Screen ───────────────────────────────────────────────────────────────
+function PinScreen({ onAuth }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const F2 = "'JetBrains Mono',monospace";
+
+  const submit = async () => {
+    if (pin.length !== 4 || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      if (res.ok) {
+        localStorage.setItem('pulse_auth', JSON.stringify({ ts: Date.now() }));
+        onAuth();
+      } else {
+        setError('PIN incorrecto. Inténtalo de nuevo.');
+        setPin('');
+      }
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#000', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Space Grotesk',-apple-system,sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');*{box-sizing:border-box}body{margin:0}@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.15)}}`}</style>
+      <div style={{ width:'100%', maxWidth:320, padding:'0 24px', textAlign:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:40 }}>
+          <div style={{ width:10, height:10, borderRadius:'50%', background:'#16f5a7', boxShadow:'0 0 12px #16f5a7', animation:'pulse 2s infinite' }}/>
+          <span style={{ fontFamily:F2, fontSize:16, fontWeight:700, letterSpacing:3, color:'#fff' }}>PULSE</span>
+        </div>
+        <div style={{ fontSize:24, fontWeight:300, color:'#fff', marginBottom:6 }}>Acceso</div>
+        <div style={{ fontSize:11, color:'#7a8599', marginBottom:32, fontFamily:F2, letterSpacing:1 }}>Introduce tu PIN de 4 dígitos</div>
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={4}
+          value={pin}
+          onChange={e => { setPin(e.target.value.replace(/\D/g,'')); setError(''); }}
+          onKeyDown={e => e.key === 'Enter' && submit()}
+          placeholder="••••"
+          autoFocus
+          style={{ width:'100%', background:'#0e0e14', border:`1px solid ${error?'#ff4757':'#1a1a1f'}`, borderRadius:14, padding:'16px', color:'#fff', fontSize:32, textAlign:'center', outline:'none', letterSpacing:12, marginBottom:error?8:24, boxSizing:'border-box', fontFamily:F2 }}
+        />
+        {error && <div style={{ color:'#ff4757', fontSize:11, fontFamily:F2, marginBottom:16 }}>{error}</div>}
+        <button
+          onClick={submit}
+          disabled={pin.length !== 4 || loading}
+          style={{ width:'100%', background:'#16f5a7', border:'none', borderRadius:14, padding:14, color:'#000', fontSize:13, fontWeight:700, letterSpacing:1.5, cursor: pin.length===4&&!loading?'pointer':'not-allowed', opacity: pin.length===4&&!loading?1:0.4, fontFamily:F2 }}
+        >
+          {loading ? '...' : 'ENTRAR'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const F="'JetBrains Mono',monospace";

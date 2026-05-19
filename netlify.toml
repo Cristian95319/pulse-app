@@ -5,7 +5,25 @@
 [functions]
   directory = "netlify/functions"
 
+# Variables de entorno — configurar en el dashboard de Netlify (Site settings → Environment variables):
+#   ANTHROPIC_API_KEY  Clave de la API de Anthropic
+#   APP_PIN            PIN de 4 dígitos para acceder a la app
+#   APP_SECRET         Token secreto que autentica las peticiones al backend
+#   VITE_APP_SECRET    Mismo valor que APP_SECRET (se incluye en el bundle del frontend)
+
 [[redirects]]
   from = "/api/chat"
   to = "/.netlify/functions/chat"
   status = 200
+
+[[redirects]]
+  from = "/api/pin"
+  to = "/.netlify/functions/verify-pin"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
